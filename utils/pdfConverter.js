@@ -2,14 +2,30 @@
 // Converts PDF files to images for OCR processing
 
 /**
+ * Wait for PDF.js library to load
+ * @returns {Promise<boolean>}
+ */
+async function waitForPdfJs(maxRetries = 20) {
+    for (let i = 0; i < maxRetries; i++) {
+        if (typeof window !== 'undefined' && window.pdfjsLib) {
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return false;
+}
+
+/**
  * Convert a PDF file to an array of base64 images (one per page)
  * @param {File} file - PDF file object
  * @param {number} maxPages - Maximum number of pages to process (default: 10)
  * @returns {Promise<Array<{page: number, base64: string}>>}
  */
 export async function convertPdfToImages(file, maxPages = 10) {
-    if (typeof window === 'undefined' || !window.pdfjsLib) {
-        throw new Error('PDF.js library not loaded');
+    // Wait for PDF.js to load
+    const isLoaded = await waitForPdfJs();
+    if (!isLoaded) {
+        throw new Error('PDF.js library failed to load. Please refresh the page and try again.');
     }
 
     try {
