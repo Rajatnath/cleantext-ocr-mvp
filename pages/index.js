@@ -6,6 +6,7 @@ import { convertPdfToImages, isPDF, validateFile } from '../utils/pdfConverter';
 export default function Home() {
   const fileRef = useRef(null);
   const [processing, setProcessing] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [status, setStatus] = useState('');
   const [result, setResult] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -24,6 +25,7 @@ export default function Home() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
+    setUploadingFiles(true);
     setResult('');
     setRetryVisible(false);
     setFilePreviews([]);
@@ -65,6 +67,7 @@ export default function Home() {
 
     setUploadedFiles(validFiles);
     setFilePreviews(previews);
+    setUploadingFiles(false);
   }
 
   function clearFiles() {
@@ -209,7 +212,16 @@ Return clean, readable plain text.`,
             {/* Left Column: Upload & Preview */}
             <div className="space-y-6">
               {/* Upload Section */}
-              <section className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-indigo-400 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200">
+              <section className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-indigo-400 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200 relative">
+                {uploadingFiles && (
+                  <div className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-3"></div>
+                      <p className="text-sm font-medium text-gray-700">Processing files...</p>
+                      <p className="text-xs text-gray-500 mt-1">Reading and generating previews</p>
+                    </div>
+                  </div>
+                )}
                 <label htmlFor="file" className="block text-sm font-semibold text-gray-700 mb-3">
                   Upload Files (Multiple images or PDF)
                 </label>
@@ -220,6 +232,7 @@ Return clean, readable plain text.`,
                   accept="image/*,application/pdf"
                   multiple
                   onChange={handleFilesChange}
+                  disabled={uploadingFiles || processing}
                   aria-label="Upload image files or PDF for OCR processing"
                   className="block w-full text-sm text-gray-600
                     file:mr-4 file:py-2 file:px-4
@@ -228,6 +241,7 @@ Return clean, readable plain text.`,
                     file:bg-indigo-600 file:text-white
                     hover:file:bg-indigo-700
                     file:cursor-pointer cursor-pointer
+                    disabled:opacity-50 disabled:cursor-not-allowed
                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 />
                 <p className="mt-3 text-xs text-gray-500 leading-relaxed">
