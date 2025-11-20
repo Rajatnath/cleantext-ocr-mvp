@@ -5,13 +5,15 @@
  * Wait for PDF.js library to load
  * @returns {Promise<boolean>}
  */
-async function waitForPdfJs(maxRetries = 20) {
+async function waitForPdfJs(maxRetries = 50) {
     for (let i = 0; i < maxRetries; i++) {
         if (typeof window !== 'undefined' && window.pdfjsLib) {
+            console.log('PDF.js loaded successfully after', i * 200, 'ms');
             return true;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
+    console.error('PDF.js failed to load after', maxRetries * 200, 'ms');
     return false;
 }
 

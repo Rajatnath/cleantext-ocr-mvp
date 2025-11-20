@@ -4,13 +4,21 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-        <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.min.js"></script>
+        <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js' async></script>
+        <script
+          src="https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.min.js"
+          async
+        ></script>
         <script dangerouslySetInnerHTML={{
           __html: `
-            if (typeof pdfjsLib !== 'undefined') {
-              pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4/build/pdf.worker.min.js';
-            }
+            window.addEventListener('load', function() {
+              if (typeof pdfjsLib !== 'undefined') {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@4.0.379/build/pdf.worker.min.js';
+                console.log('PDF.js loaded successfully');
+              } else {
+                console.error('PDF.js failed to load');
+              }
+            });
           `
         }} />
       </Head>
