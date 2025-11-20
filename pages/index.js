@@ -212,16 +212,7 @@ Return clean, readable plain text.`,
             {/* Left Column: Upload & Preview */}
             <div className="space-y-6">
               {/* Upload Section */}
-              <section className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-indigo-400 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200 relative">
-                {uploadingFiles && (
-                  <div className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-lg flex items-center justify-center z-10">
-                    <div className="text-center">
-                      <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-3"></div>
-                      <p className="text-sm font-medium text-gray-700">Processing files...</p>
-                      <p className="text-xs text-gray-500 mt-1">Reading and generating previews</p>
-                    </div>
-                  </div>
-                )}
+              <section className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-indigo-400 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200">
                 <label htmlFor="file" className="block text-sm font-semibold text-gray-700 mb-3">
                   Upload Files (Multiple images or PDF)
                 </label>
@@ -250,20 +241,30 @@ Return clean, readable plain text.`,
               </section>
 
               {/* File Previews */}
-              {filePreviews.length > 0 && (
+              {(filePreviews.length > 0 || uploadingFiles) && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold text-gray-700">
-                      Uploaded Files ({filePreviews.length})
+                      {uploadingFiles ? 'Processing Files...' : `Uploaded Files (${filePreviews.length})`}
                     </h3>
-                    <button
-                      onClick={clearFiles}
-                      className="text-xs text-red-600 hover:text-red-700 font-medium"
-                    >
-                      Clear All
-                    </button>
+                    {!uploadingFiles && (
+                      <button
+                        onClick={clearFiles}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium"
+                      >
+                        Clear All
+                      </button>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {uploadingFiles && (
+                      <div className="aspect-square bg-indigo-50 rounded border-2 border-dashed border-indigo-300 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
+                          <p className="text-xs text-indigo-600 mt-2 font-medium">Loading...</p>
+                        </div>
+                      </div>
+                    )}
                     {filePreviews.map((filePreview, index) => (
                       <div key={index} className="relative group">
                         {filePreview.type === 'pdf' ? (
