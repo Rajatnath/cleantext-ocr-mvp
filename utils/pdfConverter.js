@@ -17,8 +17,8 @@ export async function convertPdfToImages(file, maxPages = 10) {
         // Dynamically import pdfjs-dist (client-side only)
         const pdfjsLib = await import('pdfjs-dist');
 
-        // Set worker source
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+        // Set worker source to local public file
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
