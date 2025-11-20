@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Custom utility for focus-visible outlines */
+.focus-visible\:outline-indigo {
+  outline: 2px solid theme('colors.indigo.500');
+  outline-offset: 2px;
+}
