@@ -2,40 +2,29 @@
 // Converts PDF files to images for OCR processing
 
 /**
- * Wait for PDF.js library to load
- * @returns {Promise<boolean>}
- */
-async function waitForPdfJs(maxRetries = 50) {
-    for (let i = 0; i < maxRetries; i++) {
-        if (typeof window !== 'undefined' && window.pdfjsLib) {
-            console.log('PDF.js loaded successfully after', i * 200, 'ms');
-            return true;
-        }
-        await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    console.error('PDF.js failed to load after', maxRetries * 200, 'ms');
-    return false;
-}
-
-/**
  * Convert a PDF file to an array of base64 images (one per page)
  * @param {File} file - PDF file object
  * @param {number} maxPages - Maximum number of pages to process (default: 10)
  * @returns {Promise<Array<{page: number, base64: string}>>}
  */
 export async function convertPdfToImages(file, maxPages = 10) {
-    // Wait for PDF.js to load
-    const isLoaded = await waitForPdfJs();
-    if (!isLoaded) {
-        throw new Error('PDF.js library failed to load. Please refresh the page and try again.');
+    // Only run on client side
+    if (typeof window === 'undefined') {
+        throw new Error('PDF conversion must run on client side');
     }
 
     try {
+        // Dynamically import pdfjs-dist (client-side only)
+        const pdfjsLib = await import('pdfjs-dist');
+
+        // Set worker source
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.js`;
+
         // Read file as ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
 
         // Load PDF document
-        const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdf = await loadingTask.promise;
 
         const numPages = Math.min(pdf.numPages, maxPages);
@@ -78,7 +67,7 @@ export async function convertPdfToImages(file, maxPages = 10) {
 
     } catch (error) {
         console.error('PDF conversion error:', error);
-        throw new Error('Failed to convert PDF to images: ' + error.message);
+        throw new Error('Failed to convert PDF: ' + error.message);
     }
 }
 
