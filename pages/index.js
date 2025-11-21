@@ -1,21 +1,28 @@
-// filepath: pages/index.js
-// Research: file:///mnt/data/Digital Product Idea Generation Framework.docx
 import { useRef, useState } from 'react';
-import { convertPdfToImages, isPDF, validateFile } from '../utils/pdfConverter';
+import { convertPdfToImages, isPDF, validateFile, getPDFPageOne } from '../utils/pdfConverter';
+import FilePreview from '../components/FilePreview';
+import StatusBar from '../components/StatusBar';
+import Alerts from '../components/Alerts';
 
 export default function Home() {
   const fileRef = useRef(null);
   const [processing, setProcessing] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [pdfConverting, setPdfConverting] = useState(false);
+  const [pdfConversionStatus, setPdfConversionStatus] = useState('');
+
+  // New granular status state
   const [status, setStatus] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState(null);
+
   const [result, setResult] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
-  const [retryVisible, setRetryVisible] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
 
-  const MAX_BYTES = 8 * 1024 * 1024; // 8MB per file
-  const MAX_PDF_PAGES = 10;
+  const MAX_BYTES = 50 * 1024 * 1024; // 50MB per file
+  const MAX_PDF_PAGES = 50;
 
   function base64Bytes(b64) {
     return Math.ceil((b64.length * 3) / 4);
@@ -26,10 +33,13 @@ export default function Home() {
     if (files.length === 0) return;
 
     setUploadingFiles(true);
+    setError(null);
     setResult('');
-    setRetryVisible(false);
     setFilePreviews([]);
     setUploadedFiles([]);
+
+    // Simulate upload delay so the animation is visible
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     const validFiles = [];
     const previews = [];
@@ -37,16 +47,24 @@ export default function Home() {
     for (const file of files) {
       const validation = validateFile(file, MAX_BYTES);
       if (!validation.valid) {
-        alert(`${file.name}: ${validation.error}`);
+        setError({ message: `${file.name}: ${validation.error}` });
         continue;
       }
 
       if (isPDF(file)) {
-        // For PDF, create a generic preview
+        // Generate thumbnail for PDF
+        let thumbnail = null;
+        try {
+          thumbnail = await getPDFPageOne(file);
+        } catch (err) {
+          console.error('Error generating PDF thumbnail:', err);
+        }
+
         previews.push({
           type: 'pdf',
           name: file.name,
-          preview: null
+          preview: thumbnail, // Now using real thumbnail
+          pageCount: null // We could get this if we fully parsed it, but keeping it simple for now
         });
         validFiles.push(file);
       } else {
@@ -74,37 +92,68 @@ export default function Home() {
     setUploadedFiles([]);
     setFilePreviews([]);
     setResult('');
-    setRetryVisible(false);
+    setError(null);
+    setStatus('');
+    setProgress(0);
     if (fileRef.current) {
       fileRef.current.value = '';
     }
   }
 
+  function removeFile(fileToRemove) {
+    const index = filePreviews.findIndex(f => f.name === fileToRemove.name);
+    if (index === -1) return;
+
+    const newPreviews = [...filePreviews];
+    newPreviews.splice(index, 1);
+
+    const newFiles = [...uploadedFiles];
+    newFiles.splice(index, 1);
+
+    setFilePreviews(newPreviews);
+    setUploadedFiles(newFiles);
+  }
+
   async function processAllFiles() {
     if (uploadedFiles.length === 0) {
-      return alert('Please upload at least one file');
+      return setError({ message: 'Please upload at least one file' });
     }
 
     setProcessing(true);
     setResult('');
-    setRetryVisible(false);
+    setError(null);
+    setProgress(0);
 
     const allResults = [];
+    const totalSteps = uploadedFiles.length * 2; // Rough estimate: convert + extract per file
+    let currentStep = 0;
 
     try {
       for (let fileIndex = 0; fileIndex < uploadedFiles.length; fileIndex++) {
         const file = uploadedFiles[fileIndex];
         setCurrentFileIndex(fileIndex);
-        setStatus(`Processing file ${fileIndex + 1} of ${uploadedFiles.length}: ${file.name}...`);
+
+        // Update status
+        setStatus(`Processing ${file.name}...`);
 
         if (isPDF(file)) {
           // Convert PDF to images
-          setStatus(`Converting PDF pages for ${file.name}...`);
+          setPdfConverting(true);
+          setPdfConversionStatus(`Converting PDF: ${file.name}...`);
+          setStatus(`Converting PDF: ${file.name}...`);
+
+          // Small delay to allow React to render
+          await new Promise(resolve => setTimeout(resolve, 100));
+
           const pages = await convertPdfToImages(file, MAX_PDF_PAGES);
+          setPdfConverting(false);
+
+          currentStep++;
+          setProgress((currentStep / totalSteps) * 100);
 
           // Process each page
           for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
-            setStatus(`Processing ${file.name} - Page ${pageIndex + 1}/${pages.length}...`);
+            setStatus(`Extracting text from ${file.name} (Page ${pageIndex + 1}/${pages.length})...`);
 
             const pageResult = await extractTextFromImage(pages[pageIndex].base64);
             allResults.push({
@@ -113,7 +162,6 @@ export default function Home() {
               text: pageResult
             });
           }
-
         } else {
           // Process single image
           const reader = new FileReader();
@@ -126,6 +174,7 @@ export default function Home() {
             reader.readAsDataURL(file);
           });
 
+          setStatus(`Extracting text from ${file.name}...`);
           const imageResult = await extractTextFromImage(base64);
           allResults.push({
             fileName: file.name,
@@ -133,10 +182,13 @@ export default function Home() {
             text: imageResult
           });
         }
+
+        currentStep++;
+        setProgress((currentStep / totalSteps) * 100);
       }
 
       // Combine all results with file/page separators
-      const combinedResult = allResults.map((item, index) => {
+      const combinedResult = allResults.map((item) => {
         const header = item.page
           ? `═══ ${item.fileName} - Page ${item.page} ═══`
           : `═══ ${item.fileName} ═══`;
@@ -144,15 +196,24 @@ export default function Home() {
       }).join('\n\n' + '─'.repeat(60) + '\n\n');
 
       setResult(combinedResult);
-      setStatus('');
+      setStatus('Extraction complete!');
+      setProgress(100);
 
     } catch (error) {
       console.error('Processing error:', error);
-      setResult(`Error: ${error.message}`);
-      setRetryVisible(true);
+      setError({
+        message: error.message,
+        code: error.message.includes('429') ? 'rate_limit_exceeded' : 'processing_error'
+      });
+      setStatus('');
     } finally {
       setProcessing(false);
       setCurrentFileIndex(0);
+      setPdfConverting(false);
+      // Clear status after a delay if successful
+      if (!error) {
+        setTimeout(() => setStatus(''), 3000);
+      }
     }
   }
 
@@ -166,8 +227,8 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageBase64: base64Image,
-        prompt: `Transcribe all text from this image exactly as it appears. 
-        
+        prompt: `Transcribe all text from this image exactly as it appears.
+
 For mathematical formulas and equations:
 - Use Unicode subscripts (₀₁₂₃₄₅₆₇₈₉) and superscripts (⁰¹²³⁴⁵⁶⁷⁸⁹) when possible
 - For example: x₄ instead of x_4, x² instead of x^2
@@ -181,7 +242,7 @@ Return clean, readable plain text.`,
       })
     });
 
-    if (resp.status === 429) throw new Error('Rate limit exceeded');
+    if (resp.status === 429) throw new Error('Rate limit exceeded. Please try again in a minute.');
 
     const json = await resp.json();
     if (!resp.ok) throw new Error(json.error || 'Server error');
@@ -190,193 +251,156 @@ Return clean, readable plain text.`,
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-8 px-4">
-      <div className="w-full max-w-6xl bg-white shadow-lg rounded-lg overflow-hidden">
+    <div className="min-h-screen flex flex-col py-8 px-4 sm:px-6 lg:px-8 font-sans text-neutral-900">
+      {/* Loading Overlay - Shows ONLY during file upload */}
+      {uploadingFiles && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="text-center p-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-2 border-neutral-200 border-t-black mb-4"></div>
+            <h3 className="text-lg font-medium text-neutral-900">Uploading Files</h3>
+            <p className="text-sm text-neutral-500">Please wait...</p>
+          </div>
+        </div>
+      )}
+
+      <div className="w-full max-w-7xl mx-auto">
         {/* Header */}
-        <header className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-8 sm:px-8">
-          <h1 className="text-3xl font-bold text-white tracking-tight">CleanText OCR</h1>
-          <p className="mt-2 text-indigo-100 text-sm">Extract text from images and PDFs with AI-powered precision</p>
-          <p className="mt-1 text-indigo-200 text-xs opacity-75">Research: /mnt/data/Digital Product Idea Generation Framework.docx</p>
+        <header className="mb-10 flex items-center">
+          <div className="w-1 h-10 bg-black mr-5 rounded-full"></div>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-neutral-900 font-sans">CleanText OCR</h1>
+            <p className="mt-1 text-neutral-500 text-base">Extract text from images and PDFs with precision.</p>
+          </div>
         </header>
 
-        {/* Progress Bar */}
-        {processing && (
-          <div className="h-1 bg-gray-200 overflow-hidden">
-            <div className="h-full bg-indigo-600 animate-pulse w-full"></div>
-          </div>
-        )}
+        {/* Main Content - Asymmetric Grid */}
+        <main className="grid lg:grid-cols-12 gap-8 items-start">
 
-        {/* Main Content */}
-        <main className="p-6 sm:p-8">
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Left Column: Upload & Preview */}
-            <div className="space-y-6">
-              {/* Upload Section */}
-              <section className="bg-white border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-indigo-400 transition-colors focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-200">
-                <label htmlFor="file" className="block text-sm font-semibold text-gray-700 mb-3">
-                  Upload Files (Multiple images or PDF)
+          {/* Left Panel: Upload & Preview (Wider - 7 cols) */}
+          <div className="lg:col-span-7 space-y-6">
+
+            {/* Upload Section */}
+            <section className="group relative">
+              <div className="relative bg-white border-2 border-dashed border-neutral-300 rounded-lg p-8 transition-all duration-150 hover:border-neutral-400 hover:bg-neutral-50/50 hover:scale-[1.01]">
+                <label htmlFor="file" className="block cursor-pointer w-full h-full">
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-150">
+                      <svg className="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <span className="text-lg font-medium text-neutral-900">Upload files</span>
+                    <span className="mt-1 text-sm text-neutral-500">Drop PDF or images anywhere</span>
+                  </div>
+                  <input
+                    id="file"
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    multiple
+                    onChange={handleFilesChange}
+                    disabled={uploadingFiles || processing}
+                    className="hidden"
+                  />
                 </label>
-                <input
-                  id="file"
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  multiple
-                  onChange={handleFilesChange}
-                  disabled={uploadingFiles || processing}
-                  aria-label="Upload image files or PDF for OCR processing"
-                  className="block w-full text-sm text-gray-600
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-md file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-indigo-600 file:text-white
-                    hover:file:bg-indigo-700
-                    file:cursor-pointer cursor-pointer
-                    disabled:opacity-50 disabled:cursor-not-allowed
-                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                />
-                <p className="mt-3 text-xs text-gray-500 leading-relaxed">
-                  💡 <strong>Supported:</strong> JPG, PNG, PDF | <strong>Max:</strong> 8MB per file | <strong>PDF:</strong> Up to {MAX_PDF_PAGES} pages
-                </p>
-              </section>
-
-              {/* File Previews */}
-              {(filePreviews.length > 0 || uploadingFiles) && (
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700">
-                      {uploadingFiles ? 'Processing Files...' : `Uploaded Files (${filePreviews.length})`}
-                    </h3>
-                    {!uploadingFiles && (
-                      <button
-                        onClick={clearFiles}
-                        className="text-xs text-red-600 hover:text-red-700 font-medium"
-                      >
-                        Clear All
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {uploadingFiles && (
-                      <div className="aspect-square bg-indigo-50 rounded border-2 border-dashed border-indigo-300 flex items-center justify-center">
-                        <div className="text-center">
-                          <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-indigo-200 border-t-indigo-600"></div>
-                          <p className="text-xs text-indigo-600 mt-2 font-medium">Loading...</p>
-                        </div>
-                      </div>
-                    )}
-                    {filePreviews.map((filePreview, index) => (
-                      <div key={index} className="relative group">
-                        {filePreview.type === 'pdf' ? (
-                          <div className="aspect-square bg-red-50 rounded border border-red-200 flex items-center justify-center">
-                            <svg className="w-12 h-12 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                        ) : (
-                          <img
-                            src={filePreview.preview}
-                            alt={filePreview.name}
-                            className="aspect-square object-cover rounded border border-gray-200"
-                          />
-                        )}
-                        <p className="mt-1 text-xs text-gray-600 truncate" title={filePreview.name}>
-                          {filePreview.name}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Button */}
-              <div className="flex gap-3">
-                <button
-                  onClick={processAllFiles}
-                  disabled={processing || uploadedFiles.length === 0}
-                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md px-6 py-3 shadow text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all inline-flex items-center justify-center"
-                >
-                  {processing && (
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  )}
-                  {processing ? 'Processing...' : `Extract Text from ${uploadedFiles.length} file(s)`}
-                </button>
               </div>
-            </div>
+            </section>
 
-            {/* Right Column: Results */}
-            <div className="flex flex-col">
-              <div className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden flex flex-col h-full">
-                {/* Header with Copy Button */}
-                <div className="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Extracted Text
-                  </h2>
+            {/* Alerts */}
+            <Alerts error={error} onDismiss={() => setError(null)} />
+
+            {/* File Previews */}
+            {(filePreviews.length > 0) && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="flex items-center justify-between px-1">
+                  <h3 className="text-sm font-medium text-neutral-900">
+                    {filePreviews.length} file{filePreviews.length !== 1 ? 's' : ''} selected
+                  </h3>
                   <button
-                    onClick={() => {
-                      navigator.clipboard?.writeText(result || '');
-                    }}
-                    disabled={!result}
-                    aria-label="Copy extracted text to clipboard"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={clearFiles}
+                    className="text-sm text-neutral-500 hover:text-red-600 transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                    </svg>
-                    Copy
+                    Clear all
                   </button>
                 </div>
 
-                {/* Textarea */}
-                <div className="relative flex-1 min-h-[360px]">
-                  <textarea
-                    readOnly
-                    value={result}
-                    placeholder="Extracted text from all files will appear here..."
-                    aria-label="Extracted text result"
-                    aria-live="polite"
-                    className="absolute inset-0 w-full h-full p-6 bg-gray-50 text-gray-800 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
-                  />
-                  {!result && !processing && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center opacity-40">
-                        <p className="text-gray-300 text-5xl font-serif italic mb-2">Abc</p>
-                        <p className="text-gray-400 text-sm">Ready to extract text</p>
-                      </div>
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {filePreviews.map((filePreview, index) => (
+                    <FilePreview
+                      key={index}
+                      file={filePreview}
+                      onRemove={removeFile}
+                    />
+                  ))}
                 </div>
 
-                {/* Footer Stats */}
-                <div className="bg-gray-50 border-t border-gray-200 px-6 py-3 flex items-center justify-between text-xs text-gray-500">
-                  <span>{result ? `${result.length} characters` : '0 characters'}</span>
-                  <span>{uploadedFiles.length > 0 ? `${uploadedFiles.length} files uploaded` : 'No files uploaded'}</span>
+                {/* Status Bar */}
+                <StatusBar status={status} progress={progress} processing={processing} />
+
+                {/* Action Button */}
+                <button
+                  onClick={processAllFiles}
+                  disabled={processing || uploadedFiles.length === 0}
+                  className="w-full bg-black text-white rounded-full px-6 py-3 text-sm font-medium hover:bg-neutral-800 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-150 shadow-sm flex items-center justify-center gap-2"
+                >
+                  {processing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Processing...</span>
+                    </>
+                  ) : (
+                    <span>Extract Text</span>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Right Panel: Results (Narrower - 5 cols) */}
+          <div className="lg:col-span-5 h-full min-h-[600px]">
+            <div className="bg-white border border-neutral-200 rounded-lg h-full flex flex-col shadow-sm overflow-hidden">
+              {/* Panel Header */}
+              <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between bg-white">
+                <h2 className="text-sm font-medium text-neutral-900 border-b-2 border-transparent hover:border-neutral-900 transition-colors cursor-default pb-0.5">Extracted Content</h2>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-neutral-400 font-mono">
+                    {result ? `${result.length} chars` : '0 chars'}
+                  </span>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(result || '')}
+                    disabled={!result}
+                    className="text-xs font-medium bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    Copy
+                  </button>
                 </div>
               </div>
 
-              {/* Status Messages */}
-              {status && (
-                <div
-                  role="alert"
-                  aria-live="assertive"
-                  className="mt-4 bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg text-sm"
-                >
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-indigo-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="font-medium">{status}</span>
+              {/* Text Area */}
+              <div className="flex-1 relative bg-white">
+                <textarea
+                  readOnly
+                  value={result}
+                  placeholder="Text will appear here..."
+                  className="absolute inset-0 w-full h-full p-6 text-neutral-800 font-serif text-base leading-relaxed resize-none focus:outline-none placeholder:text-neutral-300 placeholder:font-sans placeholder:italic"
+                  style={{ fontFamily: 'Newsreader, serif' }}
+                />
+
+                {/* PDF Conversion Overlay (Minimal) */}
+                {pdfConverting && (
+                  <div className="absolute inset-0 bg-white/90 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center">
+                    <div className="w-full max-w-[200px] bg-neutral-100 rounded-full h-1 overflow-hidden mb-4">
+                      <div className="h-full bg-black animate-progress"></div>
+                    </div>
+                    <p className="text-sm font-medium text-neutral-900 animate-pulse">
+                      {pdfConversionStatus || 'Converting PDF...'}
+                    </p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
+
         </main>
       </div>
     </div>

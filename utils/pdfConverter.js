@@ -52,8 +52,8 @@ export async function convertPdfToImages(file, maxPages = 10) {
 
             await page.render(renderContext).promise;
 
-            // Convert canvas to base64
-            const base64 = canvas.toDataURL('image/png', 0.8).split(',')[1];
+            // Convert canvas to base64 (JPEG for smaller size)
+            const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
 
             images.push({
                 page: pageNum,
@@ -68,6 +68,39 @@ export async function convertPdfToImages(file, maxPages = 10) {
     } catch (error) {
         console.error('PDF conversion error:', error);
         throw new Error('Failed to convert PDF: ' + error.message);
+    }
+}
+
+/**
+ * Get the first page of a PDF as an image for preview
+ * @param {File} file - PDF file object
+ * @returns {Promise<string>} - Base64 image string
+ */
+export async function getPDFPageOne(file) {
+    if (typeof window === 'undefined') return null;
+
+    try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+
+        const scale = 1.0; // Lower scale for thumbnail
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({ canvasContext: context, viewport }).promise;
+        return canvas.toDataURL('image/jpeg', 0.7);
+    } catch (error) {
+        console.error('Thumbnail generation error:', error);
+        return null;
     }
 }
 

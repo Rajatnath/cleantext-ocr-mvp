@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '12mb',
+      sizeLimit: '60mb',
     },
   },
 };
@@ -39,10 +39,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'missing_image', message: 'Request must include imageBase64.' });
   }
 
-  const MAX_BYTES = 8 * 1024 * 1024; // 8MB
+  const MAX_BYTES = 50 * 1024 * 1024; // 50MB
   const bytes = base64Bytes(imageBase64);
   if (bytes > MAX_BYTES) {
-    return res.status(413).json({ error: 'payload_too_large', message: 'Image exceeds 8MB limit.' });
+    return res.status(413).json({ error: 'payload_too_large', message: 'Image exceeds 50MB limit.' });
   }
 
   // Try primary engine: Gemini Vision (server-side only)
