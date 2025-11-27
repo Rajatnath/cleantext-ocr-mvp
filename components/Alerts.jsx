@@ -3,6 +3,8 @@ import React from 'react';
 export default function Alerts({ error, onDismiss }) {
     if (!error) return null;
 
+    // WHY: We distinguish rate limits from generic errors to provide specific guidance.
+    // Rate limits are temporary and user-fixable (wait a bit), whereas other errors might need debugging.
     const isRateLimit = error.code === 'rate_limit_exceeded' || error.message?.includes('429');
 
     return (

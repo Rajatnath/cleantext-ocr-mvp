@@ -13,6 +13,8 @@ export const config = {
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX = 10; // max requests per window per IP
+// WHY: Simple in-memory rate limiting is sufficient for an MVP.
+// In a production environment with multiple server instances, this should be replaced by Redis.
 const RATE_LIMIT = new Map();
 
 function ipFromReq(req) {
@@ -46,6 +48,10 @@ export default async function handler(req, res) {
   }
 
   // Try primary engine: Gemini Vision (server-side only)
+  // WHY: We use Gemini 1.5 Flash (via proxy) as the primary engine because:
+  // 1. It has superior multimodal capabilities (text, handwriting, tables, math).
+  // 2. It is cost-effective and fast compared to larger models.
+  // 3. Server-side call protects the API key.
   let geminiError = null;
   if (!forceFallback && process.env.GEMINI_KEY) {
     try {
@@ -86,6 +92,10 @@ export default async function handler(req, res) {
   }
 
   // Fallback: PaddleOCR webhook (Colab / HuggingFace Space)
+  // WHY: We implement a fallback to PaddleOCR because:
+  // 1. AI models (Gemini) can occasionally hallucinate or fail on specific layouts.
+  // 2. Specialized OCR engines (Paddle) are sometimes better at raw text detection in complex scenes.
+  // 3. Redundancy ensures high availability for the user.
   if (process.env.PADDLE_HOOK) {
     try {
       const paddleRes = await fetch(process.env.PADDLE_HOOK, {

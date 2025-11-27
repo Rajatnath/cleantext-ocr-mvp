@@ -3,6 +3,11 @@ import React from 'react';
 export default function FilePreview({ file, onRemove }) {
     return (
         <div className="group relative aspect-[3/4] bg-white border border-neutral-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-200">
+            {/* 
+              WHY: We handle PDF previews differently than images.
+              If a preview image is generated (by our pdfConverter utility), we show it.
+              Otherwise, we fall back to a clean icon to avoid broken image links or empty boxes.
+            */}
             {file.type === 'pdf' ? (
                 file.preview ? (
                     <img
@@ -26,7 +31,10 @@ export default function FilePreview({ file, onRemove }) {
                 />
             )}
 
-            {/* Overlay with filename and remove button */}
+            {/* 
+              Overlay with filename and remove button 
+              WHY: We use a backdrop-blur overlay to ensure text readability regardless of the image content behind it.
+            */}
             <div className="absolute inset-x-0 bottom-0 bg-white/95 backdrop-blur-sm p-3 border-t border-neutral-100 flex items-center justify-between">
                 <p className="text-xs text-neutral-600 truncate font-medium flex-1 mr-2" title={file.name}>
                     {file.name}

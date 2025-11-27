@@ -5,6 +5,12 @@
 
 /**
  * Post to the serverless Gemini Vision proxy.
+ * 
+ * WHY: We use a proxy instead of calling Gemini directly from the client to:
+ * 1. Secure the API key (never expose it to the browser).
+ * 2. Handle complex error logic and potential fallbacks on the server side.
+ * 3. Transform the response into a standardized format for the frontend.
+ * 
  * @param {string} imageBase64 - The base64 encoded image string.
  * @param {boolean} forceFallback - Whether to force the fallback to PaddleOCR.
  * @returns {Promise<{text: string, source: string}>}
@@ -18,6 +24,10 @@ export async function postToGemini(imageBase64, forceFallback = false) {
             },
             body: JSON.stringify({
                 imageBase64,
+                // WHY: This prompt is carefully crafted to ensure:
+                // 1. "Transcribe... exactly": We want OCR, not interpretation.
+                // 2. "If it is handwritten...": Handles mixed media gracefully.
+                // 3. "Do not add intro/outro": We want raw text output for the user, not a chat response.
                 prompt: "Transcribe the text in this image exactly. If it is handwritten, decipher it naturally. Do not add intro/outro.",
                 forceFallback,
             }),
@@ -45,10 +55,10 @@ export async function postToGemini(imageBase64, forceFallback = false) {
 
 /**
  * Post to PaddleOCR webhook (Client-side fallback if needed, but usually handled by server).
- * Note: The requirements say the server handles fallback, but this is here just in case
- * or if we want a direct client fallback mode later. 
- * For now, we'll assume the server proxy handles it as per requirements.
- * This function might be used if we want to bypass the proxy entirely.
+ * 
+ * WHY: While the server currently handles fallbacks, this function exists to:
+ * 1. Provide a mechanism for direct client-to-secondary-service calls if the proxy fails completely.
+ * 2. Allow for future architectural changes where the client might orchestrate multiple OCR engines directly.
  */
 export async function postToPaddle(imageBase64) {
     // Placeholder for direct Paddle interaction if architecture changes.
@@ -58,6 +68,12 @@ export async function postToPaddle(imageBase64) {
 
 /**
  * Run local Tesseract.js.
+ * 
+ * WHY: This serves as the "ultimate fallback" or "offline mode".
+ * 1. It runs entirely in the browser (WebAssembly), so it works even if the backend is down.
+ * 2. It provides immediate feedback for simple images without network latency.
+ * 3. It's free, unlike the Gemini API, making it a cost-effective default for simple tasks if configured.
+ * 
  * @param {string} imageBase64 - The base64 encoded image string.
  * @returns {Promise<{text: string, source: string}>}
  */

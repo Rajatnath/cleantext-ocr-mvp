@@ -12,6 +12,11 @@ export default function StatusBar({ status, progress, processing }) {
                     <div className="w-2 h-2 mt-2 rounded-full bg-green-500 shrink-0"></div>
                 )}
                 <div className="flex-1 space-y-2">
+                    {/* 
+                      WHY: aria-live="polite" is crucial here. 
+                      It ensures screen readers announce status updates (like "Processing..." or "Completed")
+                      without interrupting the user's current action, improving accessibility significantly.
+                    */}
                     <p className="text-sm font-medium text-neutral-900" role="status" aria-live="polite">
                         {status}
                     </p>

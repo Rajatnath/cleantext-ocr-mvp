@@ -29,6 +29,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('text');
 
   // Settings State
+  // WHY: We persist settings in local state (and potentially localStorage in a real app)
+  // to allow users to customize their workflow (e.g., auto-copying results).
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState({
     autoCopy: false,
@@ -143,6 +145,10 @@ export default function Home() {
     let currentStep = 0;
 
     try {
+      // WHY: We process files sequentially rather than in parallel to:
+      // 1. Avoid hitting rate limits (429) on the API.
+      // 2. Provide a clear, linear progress indicator to the user.
+      // 3. Prevent browser freezing when processing large PDFs.
       for (let fileIndex = 0; fileIndex < uploadedFiles.length; fileIndex++) {
         const file = uploadedFiles[fileIndex];
         setCurrentFileIndex(fileIndex);
@@ -247,6 +253,9 @@ export default function Home() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         imageBase64: base64Image,
+        // WHY: We use a structured prompt to guide the AI's output format.
+        // Explicit instructions for math ($...$) and tables ensure the output
+        // renders correctly in our Markdown viewer (react-markdown + katex).
         prompt: `Transcribe all text from this image exactly as it appears.
 
 For mathematical formulas and equations:

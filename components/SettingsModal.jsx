@@ -1,5 +1,13 @@
 import React from 'react';
 
+/**
+ * Settings Modal Component
+ * 
+ * WHY: We use a dedicated modal for settings to:
+ * 1. Keep the main interface clean and focused on the primary task (OCR).
+ * 2. Prevent accidental changes by requiring explicit user intent to open/close.
+ * 3. Provide a focused context for configuration without navigating away from the work.
+ */
 export default function SettingsModal({ isOpen, onClose, settings, onSettingChange }) {
     if (!isOpen) return null;
 
@@ -66,7 +74,12 @@ export default function SettingsModal({ isOpen, onClose, settings, onSettingChan
                         </div>
                     </div>
 
-                    {/* Section: System */}
+                    {/* 
+                      Section: System 
+                      WHY: Displaying system status and version builds trust.
+                      It assures the user that the underlying engine is operational and up-to-date,
+                      which is critical for a tool that processes sensitive or important documents.
+                    */}
                     <div>
                         <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-wider mb-3">System</h3>
                         <div className="bg-neutral-50 rounded-lg p-3 space-y-2 border border-neutral-100">

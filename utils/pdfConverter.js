@@ -3,6 +3,12 @@
 
 /**
  * Convert a PDF file to an array of base64 images (one per page)
+ * 
+ * WHY: We convert PDFs to images because:
+ * 1. Most OCR engines (including Gemini Vision) are optimized for image input.
+ * 2. It allows us to show a visual preview of exactly what is being scanned.
+ * 3. It standardizes the input format for our OCR pipeline, regardless of source file type.
+ * 
  * @param {File} file - PDF file object
  * @param {number} maxPages - Maximum number of pages to process (default: 10)
  * @returns {Promise<Array<{page: number, base64: string}>>}
@@ -15,6 +21,9 @@ export async function convertPdfToImages(file, maxPages = 10) {
 
     try {
         // Dynamically import pdfjs-dist (client-side only)
+        // WHY: pdfjs-dist is a large library. We use dynamic import to:
+        // 1. Keep the initial bundle size small (lazy loading).
+        // 2. Ensure this code only runs in the browser (it relies on DOM APIs like Canvas).
         const pdfjsLib = await import('pdfjs-dist');
 
         // Set worker source to local public file
@@ -35,6 +44,10 @@ export async function convertPdfToImages(file, maxPages = 10) {
             const page = await pdf.getPage(pageNum);
 
             // Set scale for reasonable quality (2.0 = good quality)
+            // WHY: A scale of 2.0 is chosen because:
+            // 1. Standard PDF rendering at 1.0 is often too blurry for accurate OCR.
+            // 2. 2.0 provides a good balance between clarity (for OCR accuracy) and performance/memory usage.
+            // 3. Higher scales (e.g., 3.0+) might crash the browser on large documents due to canvas size limits.
             const scale = 2.0;
             const viewport = page.getViewport({ scale });
 
@@ -115,6 +128,12 @@ export function isPDF(file) {
 
 /**
  * Validate file for OCR processing
+ * 
+ * WHY: Front-end validation is crucial for UX and cost saving:
+ * 1. It gives immediate feedback to the user without waiting for an upload.
+ * 2. It prevents sending huge files that would timeout or exceed API limits.
+ * 3. It ensures we only send supported formats to the backend, saving API costs.
+ * 
  * @param {File} file - File object
  * @param {number} maxSizeBytes - Maximum file size in bytes (default: 8MB)
  * @returns {{valid: boolean, error: string}}
