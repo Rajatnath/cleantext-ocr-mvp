@@ -55,11 +55,39 @@ export default async function handler(req, res) {
   let geminiError = null;
   if (!forceFallback && process.env.GEMINI_KEY) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${process.env.GEMINI_KEY}`;
+      // WHY: Switched to gemini-2.0-flash as it is explicitly available for this API key.
+      // gemini-1.5-flash was returning 404.
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_KEY}`;
       const body = {
         contents: [{
           parts: [
-            { text: prompt },
+            // WHY: We use a structured prompt to guide the AI's output format.
+            // Explicit instructions for math ($...$) and tables ensure the output
+            // renders correctly in our Markdown viewer (react-markdown + katex).
+            {
+              text: `Transcribe all text from this image exactly as it appears.
+
+For mathematical formulas and equations:
+- CRITICAL: Do NOT use LaTeX formatting. Do NOT use dollar signs ($).
+- Write formulas in PLAIN TEXT using standard keyboard characters and Unicode symbols.
+- Use standard operators: +, -, *, /, =
+- Use Unicode symbols for Greek letters and math symbols: ∂, α, Δ, π, ≈, →, etc.
+- Represent fractions using forward slash: (a+b)/2
+- Represent superscripts/subscripts using ^ and _: T_i^n or just T(i, n) if clearer.
+- Example: ∂T/∂t = α * ∂²T/∂x²
+- Example: T(i, n+1) = T(i, n) + Δt * ...
+- Keep it simple and readable.
+
+For text and formatting:
+- Do not transcribe long lines of underscores.
+- Maintain the layout and structure of the document.
+
+For tables:
+- Detect all tabular data and represent it using standard Markdown tables.
+- Preserve column headers and structure.
+
+Return the content as a Markdown document.`
+            },
             { inlineData: { mimeType: "image/png", data: imageBase64 } }
           ]
         }]
@@ -75,13 +103,21 @@ export default async function handler(req, res) {
         const json = await r.json();
         const text = json?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
         if (text.trim().length) {
-          return res.status(200).json({ text: text.trim(), source: 'gemini' });
+          // Clean up markdown code blocks if present
+          let cleanedText = text.trim();
+          // Remove starting ```markdown or ```
+          cleanedText = cleanedText.replace(/^```(?:markdown)?\s+/, '');
+          // Remove ending ```
+          cleanedText = cleanedText.replace(/\s+```$/, '');
+
+          return res.status(200).json({ text: cleanedText.trim(), source: 'gemini' });
         }
         geminiError = 'empty_text';
+        console.error('Gemini returned empty text:', JSON.stringify(json));
       } else {
         const errText = await r.text();
-        console.error('Gemini API error:', errText.slice(0, 400));
-        geminiError = `http_${r.status}`;
+        console.error(`Gemini API error (${r.status}):`, errText.slice(0, 400));
+        geminiError = `http_${r.status}: ${errText.slice(0, 100)}`;
       }
     } catch (err) {
       console.error('Gemini network error:', err?.message || err);

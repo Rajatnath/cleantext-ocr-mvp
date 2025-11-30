@@ -4,6 +4,7 @@ import FilePreview from '../components/FilePreview';
 import StatusBar from '../components/StatusBar';
 import Alerts from '../components/Alerts';
 import SettingsModal from '../components/SettingsModal';
+import ExportOptions from '../components/ExportOptions';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import remarkGfm from 'remark-gfm';
@@ -259,16 +260,23 @@ export default function Home() {
         prompt: `Transcribe all text from this image exactly as it appears.
 
 For mathematical formulas and equations:
-- Use standard LaTeX formatting for all mathematical expressions
-- Wrap inline formulas in single dollar signs, e.g., $E = mc^2$
-- Wrap block formulas in double dollar signs, e.g., $$ \\frac{d}{dx}f(x) $$
-- Use standard operators: \\times for multiplication, \\div for division
-- Preserve all mathematical structure and layout
+- CRITICAL: Do NOT use LaTeX formatting. Do NOT use dollar signs ($).
+- Write formulas in PLAIN TEXT using standard keyboard characters and Unicode symbols.
+- Use standard operators: +, -, *, /, =
+- Use Unicode symbols for Greek letters and math symbols: ∂, α, Δ, π, ≈, →, etc.
+- Represent fractions using forward slash: (a+b)/2
+- Represent superscripts/subscripts using ^ and _: T_i^n or just T(i, n) if clearer.
+- Example: ∂T/∂t = α * ∂²T/∂x²
+- Example: T(i, n+1) = T(i, n) + Δt * ...
+- Keep it simple and readable.
+
+For text and formatting:
+- Do not transcribe long lines of underscores.
+- Maintain the layout and structure of the document.
 
 For tables:
-- Detect all tabular data and represent it using standard Markdown tables
-- Preserve column headers and structure exactly as they appear
-- Ensure all data is correctly aligned in the corresponding columns
+- Detect all tabular data and represent it using standard Markdown tables.
+- Preserve column headers and structure.
 
 Return the content as a Markdown document.`,
         forceFallback: false
@@ -473,12 +481,16 @@ Return the content as a Markdown document.`,
                 </div>
 
                 {result && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-neutral-400 font-mono">{result.length} chars</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-neutral-400 font-mono mr-2">{result.length} chars</span>
+
+                    <div className="h-4 w-px bg-neutral-200 mx-1"></div>
+
                     <button
                       onClick={() => navigator.clipboard?.writeText(result || '')}
-                      className="text-xs font-medium bg-neutral-50 hover:bg-neutral-100 text-neutral-900 px-3 py-1.5 rounded-full transition-colors border border-neutral-200"
+                      className="text-xs font-medium bg-neutral-50 hover:bg-neutral-100 text-neutral-900 px-3 py-1.5 rounded-full transition-colors border border-neutral-200 flex items-center gap-1.5"
                     >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                       Copy
                     </button>
                   </div>
@@ -491,8 +503,7 @@ Return the content as a Markdown document.`,
                   activeTab === 'text' ? (
                     <div className="absolute inset-0 w-full h-full p-8 text-neutral-800 font-serif text-base leading-relaxed overflow-y-auto prose prose-neutral max-w-none prose-headings:font-sans prose-headings:font-bold prose-p:leading-loose">
                       <ReactMarkdown
-                        remarkPlugins={[remarkMath, remarkGfm]}
-                        rehypePlugins={[rehypeKatex]}
+                        remarkPlugins={[remarkGfm]}
                         components={{
                           p: ({ node, ...props }) => <p className="mb-4" {...props} />,
                           table: ({ node, ...props }) => (
@@ -534,10 +545,18 @@ Return the content as a Markdown document.`,
                   </div>
                 )}
               </div>
+
+              {/* Footer / Export Options */}
+              {result && (
+                <div className="p-4 bg-neutral-50 border-t border-neutral-200">
+                  <ExportOptions text={result} />
+                </div>
+              )}
             </div>
-          </div>
-        )}
-      </main>
+          </div >
+        )
+        }
+      </main >
     </div >
   );
 }
